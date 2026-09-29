@@ -1,0 +1,53 @@
+name: Generar casillas POI
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"   # día 1 de cada mes, 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "Regiones de Geofabrik separadas por espacios (vacío = toda Europa). Ej: spain andorra"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar osmium
+        run: sudo apt-get update -q && sudo apt-get install -y -q osmium-tool
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generar casillas
+        env:
+          REGIONS: ${{ inputs.regions }}
+        run: python build_tiles.py --out site --work "$RUNNER_TEMP/work" $REGIONS
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
